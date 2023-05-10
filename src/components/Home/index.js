@@ -1,5 +1,10 @@
 import React, { useEffect, useState, useContext } from "react";
-import { getAllCharacters, getFilms, getSpecies } from "../../utils/Api";
+import {
+  getCharacters,
+  getFilms,
+  getSpecies,
+  getFirst20Characters,
+} from "../../utils/Api";
 import Container from "react-bootstrap/Container";
 import Row from "react-bootstrap/Row";
 import Col from "react-bootstrap/Col";
@@ -20,107 +25,135 @@ const Home = () => {
   const [selectedSpecies, setSelectedSpecies] = useState("");
   const [birthDay, setBirthday] = useState({ from: 0, to: 0 });
   useEffect(() => {
-    if (!isObjEmpty(data)) updateData();
-    else fetchData();
-  }, [data]);
+    if (!isObjEmpty(data)) {
+      updateData();
+    } else {
+      fetchFirst20Movies();
+      fetcheFilms();
+      fetchSpecies();
+    }
+  }, []);
   useEffect(() => {
-    if (birthDay.from || birthDay.to || selectedMovie || selectedSpecies)
-      handleSeach();
+    handleSeach(isObjEmpty(data) ? null : data);
   }, [birthDay.from, birthDay.to, selectedMovie, selectedSpecies]);
-  const handleSeach = () => {
+  useEffect(() => {
+    handleUpdateContext();
+  }, [filteredCharacters, episodes, species]);
+  useEffect(() => {
+    if (Object.keys(characters).length > 1) fetchMoreCharacters();
+  }, [characters]);
+  const handleUpdateContext = () => {
+    if (
+      episodes.length > 0 &&
+      species.length > 0 &&
+      !isObjEmpty(filteredCharacters)
+    ) {
+      setData({
+        ...data,
+        fetchedCharacters: filteredCharacters,
+        fetchedSpecies: species,
+        fetchedFilms: episodes,
+      });
+    }
+  };
+  const handleSeach = (fetchedData) => {
     const { from, to } = birthDay;
-    if (selectedMovie && selectedSpecies && to) {
-      let movies = filterByMovies(filteredCharacters, selectedMovie);
-      let BD = filterByBirthYear(movies, from, to);
-      setCharacters(filterBySpecies(BD, selectedSpecies));
-    } else if (selectedMovie && selectedSpecies) {
-      let movies = filterByMovies(filteredCharacters, selectedMovie);
-      setCharacters(filterBySpecies(movies, selectedSpecies));
-    } else if (selectedMovie && to) {
-      let movies = filterByMovies(filteredCharacters, selectedMovie);
-      setCharacters(filterByBirthYear(movies, from, to));
-    } else if (selectedSpecies && to) {
-      let species = filterBySpecies(filteredCharacters, selectedSpecies);
-      let BD = filterByBirthYear(species, from, to);
-      setCharacters(BD);
-    } else if (selectedMovie) {
-      setCharacters(filterByMovies(filteredCharacters, selectedMovie));
-    } else if (selectedSpecies) {
-      setCharacters(filterBySpecies(filteredCharacters, selectedSpecies));
-    } else if (to) {
-      let BD = filterByBirthYear(filteredCharacters, from, to);
-      setCharacters(BD);
-    } else setCharacters(filteredCharacters);
+    let allCharacters = fetchedData?.fetchedCharacters || filteredCharacters;
+
+    if (selectedMovie)
+      allCharacters = filterByMovies(allCharacters, selectedMovie);
+
+    if (selectedSpecies)
+      allCharacters = filterBySpecies(allCharacters, selectedSpecies);
+
+    if (to) allCharacters = filterByBirthYear(allCharacters, from, to);
+    setCharacters(allCharacters);
   };
   const updateData = () => {
     setCharacters({ ...data.fetchedCharacters });
     setFilteredCharacters({ ...data.fetchedCharacters });
     setCurrentPage(1);
-
     setEpisodes(data.fetchedFilms);
     setSpecies(data.fetchedSpecies);
   };
-  const fetchData = async () => {
+  const fetchFirst20Movies = async () => {
     setLoading(true);
-    let fetchedCharacters = null,
-      fetchedFilms = null,
-      fetchedSpecies = null;
-    fetchedCharacters = await getAllCharacters();
-    fetchedFilms = await getFilms();
-    fetchedSpecies = await getSpecies();
-    setData({ fetchedCharacters, fetchedFilms, fetchedSpecies });
-
+    let fetchedCharacters = await getFirst20Characters();
+    setLoading(false);
     setCharacters({ ...fetchedCharacters });
     setFilteredCharacters({ ...fetchedCharacters });
     setCurrentPage(1);
-
+  };
+  const fetcheFilms = async () => {
+    let fetchedFilms = await getFilms();
     setEpisodes(fetchedFilms);
+  };
+  const fetchSpecies = async () => {
+    let fetchedSpecies = await getSpecies();
     setSpecies(fetchedSpecies);
-    setLoading(false);
+  };
+  const fetchMoreCharacters = async (page = 3) => {
+    if (filteredCharacters[page]) return;
+    if (birthDay.from || birthDay.to || selectedMovie || selectedSpecies)
+      return;
+
+    let fetchedCharacters = await getCharacters(page);
+    const { next, results } = fetchedCharacters;
+    if (next) {
+      fetchMoreCharacters(page + 1);
+    }
+    filteredCharacters[page] = results;
+    setCharacters({ ...filteredCharacters });
+    setFilteredCharacters({ ...filteredCharacters });
+    setCurrentPage(1);
   };
   const RenderSearches = () => {
     return (
       <Row className="pb-5">
-        <Col lg={3} md={3} sm={6} xs={12} className="my-2">
-          <label htmlFor="movie">Movies</label>
-          <Form.Select
-            id="movie"
-            value={selectedMovie}
-            onChange={(e) =>
-              setSelectedMovie(
-                e.target.value === "All Movies" ? "" : e.target.value
-              )
-            }
-            className="my-2"
-          >
-            <option value="All Movies">All Movies</option>
-            {episodes?.map((movie, index) => (
-              <option value={movie?.url} key={index}>
-                {movie?.title}
-              </option>
-            ))}
-          </Form.Select>
-        </Col>
-        <Col lg={3} md={3} sm={6} xs={12} className="my-2">
-          <label htmlFor="species">Species</label>
-          <Form.Select
-            id="species"
-            value={selectedSpecies}
-            onChange={(e) =>
-              setSelectedSpecies(
-                e.target.value === "All Species" ? "" : e.target.value
-              )
-            }
-            className="my-2"
-          >
-            <option value="All Species">All Species</option>
-            {species?.map((specie, index) => (
-              <option value={specie?.url} key={index}>
-                {specie?.name}
-              </option>
-            ))}
-          </Form.Select>
-        </Col>
+        {episodes.length > 0 && (
+          <Col lg={3} md={3} sm={6} xs={12} className="my-2">
+            <label htmlFor="movie">Movies</label>
+            <Form.Select
+              id="movie"
+              value={selectedMovie}
+              onChange={(e) =>
+                setSelectedMovie(
+                  e.target.value === "All Movies" ? "" : e.target.value
+                )
+              }
+              className="my-2"
+            >
+              <option value="All Movies">All Movies</option>
+              {episodes?.map((movie, index) => (
+                <option value={movie?.url} key={index}>
+                  {movie?.title}
+                </option>
+              ))}
+            </Form.Select>
+          </Col>
+        )}
+        {species.length > 0 && (
+          <Col lg={3} md={3} sm={6} xs={12} className="my-2">
+            <label htmlFor="species">Species</label>
+            <Form.Select
+              id="species"
+              value={selectedSpecies}
+              onChange={(e) =>
+                setSelectedSpecies(
+                  e.target.value === "All Species" ? "" : e.target.value
+                )
+              }
+              className="my-2"
+            >
+              <option value="All Species">All Species</option>
+              {species?.map((specie, index) => (
+                <option value={specie?.url} key={index}>
+                  {specie?.name}
+                </option>
+              ))}
+            </Form.Select>
+          </Col>
+        )}
         <Col lg={3} md={3} sm={6} xs={12} className="my-2">
           <label htmlFor="from">Birth Date From</label>
           <Form.Control
@@ -128,6 +161,7 @@ const Home = () => {
             value={birthDay.from}
             onChange={(e) => setBirthday({ ...birthDay, from: e.target.value })}
             className="my-2"
+            type="number"
           />
         </Col>
         {birthDay.from > 0 && (
@@ -138,6 +172,7 @@ const Home = () => {
               value={birthDay.to}
               onChange={(e) => setBirthday({ ...birthDay, to: e.target.value })}
               className="my-2"
+              type="number"
             />
           </Col>
         )}
@@ -165,7 +200,7 @@ const Home = () => {
               >
                 <CharacterCard
                   character={character}
-                  id={character?.url?.match(/\/(\d+)\//)[1]} 
+                  id={character?.url?.match(/\/(\d+)\//)[1]}
                 />
               </Col>
             ))}

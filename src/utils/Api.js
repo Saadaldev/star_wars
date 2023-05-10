@@ -1,27 +1,24 @@
-import axios from "axios";
+import axios from "./axios";
 
-const API_BASE_URL = "https://swapi.dev/api";
-
-const getCharacters = async (page = 1) => {
-  const response = await axios.get(`${API_BASE_URL}/people/?page=${page}`);
+export const getCharacters = async (page = 1) => {
+  const response = await axios.get(`/people/?page=${page}`);
   return response.data;
 };
-export const getAllCharacters = async (page = 1, allCharacters = {}) => {
-  const data = await getCharacters(page);
-  allCharacters[page] = data.results;
-  if (data.next) {
-    const nextPage = page + 1;
-    return getAllCharacters(nextPage, allCharacters);
-  }
-  return allCharacters;
+export const getFirst20Characters = async () => {
+  const [first10, next10] = await Promise.all([
+    getCharacters(1),
+    getCharacters(2),
+  ]);
+  return { 1: first10.results, 2: next10.results };
 };
+
 export const getFilms = async () => {
-  const response = await axios.get(`${API_BASE_URL}/films/`);
+  const response = await axios.get(`/films/`);
   return response.data.results;
 };
 export const getSpecies = async () => {
   const allSpecies = [];
-  const response = await axios.get(`${API_BASE_URL}/species/`);
+  const response = await axios.get(`/species/`);
   for (
     let i = 1;
     i <= Math.ceil(response.data.count / response.data.results.length);
@@ -45,7 +42,7 @@ export const getData = async (Urls) => {
   return speciesData;
 };
 export const getCharacterById = async (id) => {
-  let response = await axios.get(`${API_BASE_URL}/people/${id}/`);
+  let response = await axios.get(`/people/${id}/`);
   const speciesData = await getData(response.data.species);
   const filmsData = await getData(response.data.films);
   const StarShipsData = await getData(response.data.starships);
